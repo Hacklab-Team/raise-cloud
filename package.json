@@ -1,0 +1,21 @@
+{
+  "name": "raise-cloud",
+  "private": true,
+  "type": "module",
+  "workspaces": ["admin", "app"],
+  "scripts": {
+    "db:start": "supabase start",
+    "db:reset": "supabase db reset",
+    "functions": "supabase functions serve --env-file supabase/functions/.env",
+    "create-admin": "node scripts/create-admin.mjs",
+    "admin": "npm run dev -w admin",
+    "app": "npm run dev -w app",
+    "build": "npm run build -w admin && npm run build -w app"
+  },
+  "devDependencies": {
+    "supabase": "^2.120.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.58.0"
+  }
+}
