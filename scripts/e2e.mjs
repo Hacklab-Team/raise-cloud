@@ -78,6 +78,7 @@ const link = await kiosk(key, "link_card", { pass: aliceToken, card });
 check("kiosk links an NFC card", link.status === 200, link.body.error);
 const id2 = await kiosk(key, "identify", { card });
 check("card logs the customer in", id2.status === 200 && id2.body.customer?.id === me.id && id2.body.customer.has_card === true);
+check("card login returns the customer's pass QR", id2.body.token === aliceToken, id2.body.token);
 const { data: aliceCards } = await alice.from("nfc_cards").select("uid_hash");
 check("customer sees their linked card", aliceCards.length === 1);
 

@@ -2,7 +2,9 @@
 // created in the admin panel (shown once) and only its SHA-256 is stored.
 //
 //   heartbeat  { info }                          keep "online" status + camera/app info
-//   identify   { pass } | { card }               -> { customer }   pass QR token or card uid hash
+//   identify   { pass } | { card }               -> { customer, token }   pass QR token or card uid hash
+//              (token = the customer's pass QR, so the kiosk's account menu can show it after a card
+//              login, e.g. to claim a kiosk-made pass in the RAISE app)
 //   register   { name, phone? }                  -> { customer, token }   new customer at the kiosk
 //   link_card  { pass, card }                    link an NFC card (uid hash) to a pass
 //   checkout   { items: [{barcode, qty, price?, title?}], pass? | customer_id? }  -> { order }
@@ -52,13 +54,16 @@ const actions: Record<string, (body: any, kiosk: { id: string; name: string }) =
     },
 
     async identify(body) {
-        if (body.pass) return { customer: await withCard(await customerByPass(body.pass)) };
+        if (body.pass) {
+            const c = await withCard(await customerByPass(body.pass));
+            return { customer: c, token: await issuePassToken(c.pass_id) };
+        }
         if (isUidHash(body.card)) {
             const { data: card } = await db.from("nfc_cards").select("customer_id").eq("uid_hash", body.card).maybeSingle();
             if (!card) throw new HttpError(404, "This card isn't linked yet. Log in with your pass QR and link it, or link it in the RAISE app.");
             const { data } = await db.from("customers").select(CUSTOMER_FIELDS).eq("id", card.customer_id).single();
             if (data.blocked) throw new HttpError(403, "This account is blocked. Please ask a staff member.");
-            return { customer: { ...data, has_card: true } };
+            return { customer: { ...data, has_card: true }, token: await issuePassToken(data.pass_id) };
         }
         throw new HttpError(400, "Send a pass or a card");
     },
