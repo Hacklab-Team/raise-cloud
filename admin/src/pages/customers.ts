@@ -77,6 +77,7 @@ async function openCustomer(c: Customer, onChange: () => void): Promise<void> {
           ${(orders ?? []).length ? `<table class="lines">${(orders ?? []).map((o) => `<tr><td>#${o.number} · <span class="status ${o.status}">${o.status}</span> <span style="color:var(--mute);font-size:12px">${timeAgo(o.created_at)}</span></td><td>${inr(o.total)}</td></tr>`).join("")}</table>` : `<p class="hint">No orders yet.</p>`}
         </div>`,
         `<button class="btn left" id="reissue" type="button">${icon("refresh")} Re-issue pass</button>
+         <button class="btn btn--danger" id="delete" type="button">${icon("trash")} Delete</button>
          <button class="btn ${c.blocked ? "" : "btn--danger"}" id="block" type="button">${icon(c.blocked ? "unlock" : "lock")} ${c.blocked ? "Unblock" : "Block"}</button>
          <button class="btn" data-close type="button">Close</button>`);
     const $ = (id: string) => d.querySelector<HTMLElement>("#" + id);
@@ -101,6 +102,13 @@ async function openCustomer(c: Customer, onChange: () => void): Promise<void> {
         const { error } = await sb.from("customers").update({ blocked: !c.blocked }).eq("id", c.id);
         if (error) return toast(error.message, "warn");
         toast(c.blocked ? `${c.name} unblocked` : `${c.name} blocked`); d.close(); onChange();
+    });
+    $("delete")!.addEventListener("click", async () => {
+        const note = c.user_id ? " Their RAISE app login is deleted too." : "";
+        if (!(await confirmSheet(`Delete ${c.name}?`, `This removes the customer, their points, pass and NFC card link. Their past orders stay in your sales history as guest orders.${note} This can't be undone.`, "Delete customer", true))) return;
+        const { error } = await sb.rpc("admin_delete_customer", { target: c.id });
+        if (error) return toast(error.message, "warn");
+        toast(`${c.name} deleted`); d.close(); onChange();
     });
     $("reissue")!.addEventListener("click", async () => {
         if (!(await confirmSheet("Re-issue pass?", "The current QR (on their phone or printed) stops working immediately. They get the new one in the app; kiosk-only customers need a new printout.", "Re-issue"))) return;

@@ -113,6 +113,40 @@ check("claimed pass is now the account's customer", kimMe?.id === reg.body.custo
 const { error: stealErr } = await bob.functions.invoke("pass", { body: { action: "claim", token: reg.body.token } });
 check("a claimed pass can't be claimed again", !!stealErr);
 
+// ---------------------------------------------------------------- admin panel (as a signed-in admin)
+// These run with a real admin session, exactly like the admin panel (not the service key).
+const adminEmail = `e2e-admin-${Date.now()}@raise.test`;
+const { data: au } = await admin.auth.admin.createUser({ email: adminEmail, password: "e2e-admin-pass-1", email_confirm: true, app_metadata: { role: "admin" } });
+await admin.from("admins").upsert({ user_id: au.user.id });
+await admin.from("customers").delete().eq("user_id", au.user.id);
+const panel = createClient(URL_, ANON, opts);
+await panel.auth.signInWithPassword({ email: adminEmail, password: "e2e-admin-pass-1" });
+const { error: adjErr } = await panel.from("customers").update({ points: alicePts.points + 25 }).eq("id", me.id);
+const { data: afterAdj } = await admin.from("customers").select("points").eq("id", me.id).single();
+check("admin can adjust points", !adjErr && afterAdj.points === alicePts.points + 25, adjErr?.message ?? `${afterAdj.points}`);
+const { error: blkErr } = await panel.from("customers").update({ blocked: true }).eq("id", me.id);
+check("admin can block a customer", !blkErr, blkErr?.message);
+const { error: unbErr } = await panel.from("customers").update({ blocked: false }).eq("id", me.id);
+check("admin can unblock a customer", !unbErr, unbErr?.message);
+const { error: custPtsErr } = await alice.from("customers").update({ points: 5000 }).eq("id", me.id);
+check("customers still can't set points", !!custPtsErr, custPtsErr?.message);
+const { error: custBlkErr } = await bob.from("customers").update({ blocked: true }).eq("user_id", (await bob.auth.getUser()).data.user.id);
+check("customers can't change their own status", !!custBlkErr, custBlkErr?.message);
+const { error: notAdminDel } = await bob.rpc("admin_delete_customer", { target: me.id });
+check("customers can't delete customers", !!notAdminDel, notAdminDel?.message);
+
+// delete Kim (kiosk-registered, then claimed in the app): customer, login and card go; orders stay
+const kimEmail = (await kim.auth.getUser()).data.user.email;
+const kimOrder = await kiosk(key, "checkout", { customer_id: reg.body.customer.id, items: [{ barcode: item.barcode, qty: 1 }] });
+const { error: delErr } = await panel.rpc("admin_delete_customer", { target: reg.body.customer.id });
+check("admin can delete a customer", !delErr, delErr?.message);
+const { data: gone } = await admin.from("customers").select("id").eq("id", reg.body.customer.id);
+const { data: keptOrder } = await admin.from("orders").select("customer_id").eq("id", kimOrder.body.order.id).single();
+check("deleted customer's orders stay as guest orders", gone.length === 0 && keptOrder.customer_id === null);
+const { error: kimLogin } = await createClient(URL_, ANON, opts).auth.signInWithPassword({ email: kimEmail, password: "e2e-password-123" });
+check("deleted customer's app login is removed", !!kimLogin, kimLogin?.message);
+await admin.auth.admin.deleteUser(au.user.id);
+
 // ---------------------------------------------------------------- admin controls
 await admin.from("customers").update({ blocked: true }).eq("id", me.id);
 check("blocked customer is refused at the kiosk", (await kiosk(key, "identify", { pass: aliceToken })).status === 403);
