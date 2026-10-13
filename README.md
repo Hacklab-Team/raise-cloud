@@ -1,14 +1,56 @@
 # RAISE Cloud
 
-Backend, admin panel and customer app for the RAISE self-checkout kiosk (`../RAISE`).
+The backend, store admin panel and customer app for **[RAISE](https://github.com/Hacklab-Team/RAISE)**, a Raspberry Pi self-checkout kiosk. Shoppers scan and pay at the kiosk; their orders, points and NFC card live here; the store runs everything from the admin panel.
+
+| | Link |
+|---|---|
+| Kiosk | https://raise.bindalvansh01.workers.dev/ |
+| Customer app (installable PWA) | https://raise.bindalvansh01.workers.dev/app/ |
+| Admin panel | https://raise.bindalvansh01.workers.dev/admin/ |
+| Kiosk + Raspberry Pi code | [Hacklab-Team/RAISE](https://github.com/Hacklab-Team/RAISE) |
+
+## What's here
+
+**Admin panel** (`admin/`): for the store.
+- **Dashboard:** today's sales and top products.
+- **Orders:** orders appear live as kiosks check out.
+- **Products:** prices and catalog.
+- **Customers:** points, NFC cards, block, re-issue a pass, delete.
+- **Kiosks:** online status and one-click setup links.
+
+**Customer app** (`app/`): an installable PWA.
+- Your RAISE Pass QR, points and receipts.
+- A shopping list over the store catalog.
+- Link an NFC card from your phone (Web NFC).
+- Claim a pass you made at a kiosk, so earlier purchases join your account.
+
+**Backend** (`supabase/`):
+- Postgres with row-level security on every table.
+- Two Edge Functions: `kiosk` (the kiosk API) and `pass` (issues and claims passes).
+- Realtime updates for live orders.
 
 ```
 raise-cloud/
-  supabase/   database schema + row-level security, Edge Functions, seed catalog
+  supabase/   migrations (schema, row-level security, admin RPCs), Edge Functions, seed catalog
   admin/      store admin panel (Vite + TypeScript)
   app/        customer PWA (Vite + TypeScript, installable, works offline)
   shared/     design tokens, icons and helpers shared with the kiosk look
-  scripts/    create-admin.mjs
+  scripts/    create-admin.mjs, e2e.mjs (end-to-end checks)
+```
+
+## Tested end to end
+
+`scripts/e2e.mjs` runs about 40 checks against a real Supabase stack, local or cloud, and cleans up after itself. It covers:
+- anonymous users can't read orders or change prices;
+- customers see only their own data and can't give themselves points;
+- forged and wrong passes are rejected, and wrong or disabled kiosk keys are refused;
+- checkout ignores prices sent by the kiosk;
+- payment adds points;
+- pass claiming works, and a claimed pass can't be claimed twice;
+- admin actions are tested with a real admin login, not the service key.
+
+```bash
+SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/e2e.mjs
 ```
 
 ## How the pieces connect
